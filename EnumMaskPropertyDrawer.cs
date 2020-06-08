@@ -1,16 +1,12 @@
 ﻿/*
- Written by: Lucas Antunes (aka ItsaMeTuni), lucasba8@gmail.com
- In: 2/15/2018
- The only thing that you cannot do with this script is sell it by itself without substantially modifying it.
- */
-
-/*
 Written by: Lucas Antunes (aka ItsaMeTuni), lucasba8@gmail.com
 In: 2/15/2018
 The only thing that you cannot do with this script is sell it by itself without substantially modifying it.
- 
+
 Updated by Baste Nesse Buanes, baste@rain-games.com (thanks to @lordofduct for GetTargetOfProperty implementation)
 06-Sep-2019
+
+Updated to fix undo/dirtying issues and moved to GitHub by @odan-travis 08-Jun-2020
 */
 
 using System;
@@ -31,7 +27,7 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
 
     public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
     {
-        var enumMaskAttribute = ((EnumMaskAttribute)attribute);
+        var enumMaskAttribute = ((EnumMaskAttribute) attribute);
         var foldoutOpen = enumMaskAttribute.alwaysFoldOut;
 
         if (!foldoutOpen)
@@ -43,7 +39,7 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
         }
         if (foldoutOpen)
         {
-            var layout = ((EnumMaskAttribute)attribute).layout;
+            var layout = ((EnumMaskAttribute) attribute).layout;
             if (layout == EnumMaskLayout.Vertical)
                 return EditorGUIUtility.singleLineHeight * (Enum.GetValues(fieldInfo.FieldType).Length + 2);
             else
@@ -77,7 +73,7 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
 
         EditorGUI.BeginProperty(position, label, property);
 
-        var enumMaskAttribute = ((EnumMaskAttribute)attribute);
+        var enumMaskAttribute = ((EnumMaskAttribute) attribute);
         var alwaysFoldOut = enumMaskAttribute.alwaysFoldOut;
         var foldoutOpen = alwaysFoldOut;
 
@@ -87,8 +83,7 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
         }
         else
         {
-            if (!openFoldouts.TryGetValue(property.propertyPath, out foldoutOpen))
-            {
+            if (!openFoldouts.TryGetValue(property.propertyPath, out foldoutOpen)) {
                 openFoldouts[property.propertyPath] = false;
             }
 
@@ -104,16 +99,12 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
             //Draw the All button
             if (GUI.Button(new Rect(position.x + (15f * EditorGUI.indentLevel), position.y + EditorGUIUtility.singleLineHeight * 1, 30, 15), "All"))
             {
-                Undo.RecordObject(targetObject as UnityEngine.Object, "[All] set in enum mask");
-
                 theEnum = DoNotOperator(Convert.ChangeType(0, enumUnderlyingType), enumUnderlyingType);
             }
 
             //Draw the None button
             if (GUI.Button(new Rect(position.x + 32 + (15f * EditorGUI.indentLevel), position.y + EditorGUIUtility.singleLineHeight * 1, 50, 15), "None"))
             {
-                Undo.RecordObject(targetObject as UnityEngine.Object, "[None] set in enum mask");
-
                 theEnum = Convert.ChangeType(0, enumUnderlyingType);
             }
 
@@ -124,21 +115,12 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
                 //Draw the list vertically
                 for (int i = 0; i < Enum.GetNames(fieldInfo.FieldType).Length; i++)
                 {
-                    var isSet = IsSet(i);
-                    if (EditorGUI.Toggle(new Rect(position.x, position.y + EditorGUIUtility.singleLineHeight * (2 + i), position.width, EditorGUIUtility.singleLineHeight), Enum.GetNames(fieldInfo.FieldType)[i],isSet))
+                    if (EditorGUI.Toggle(new Rect(position.x, position.y + EditorGUIUtility.singleLineHeight * (2 + i), position.width, EditorGUIUtility.singleLineHeight), Enum.GetNames(fieldInfo.FieldType)[i], IsSet(i)))
                     {
-                        if(!isSet)
-                        {
-                            Undo.RecordObject(targetObject as UnityEngine.Object, "Toggled " + Enum.GetNames(fieldInfo.FieldType)[i] + "in mask on");
-                        }
                         ToggleIndex(i, true);
                     }
                     else
                     {
-                        if (isSet)
-                        {
-                            Undo.RecordObject(targetObject as UnityEngine.Object, "Toggled " + Enum.GetNames(fieldInfo.FieldType)[i] + "in mask off");
-                        }
                         ToggleIndex(i, false);
                     }
                 }
@@ -166,28 +148,18 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
                 EditorGUI.indentLevel = 0;
 
                 position.width = toggleWidth;
-                position.y += +EditorGUIUtility.singleLineHeight * 2;
+                position.y += EditorGUIUtility.singleLineHeight * 2;
                 var xBase = position.x + oldIndentLevel * 15f;
                 for (int i = 0; i < enumNames.Length; i++)
                 {
                     position.x = xBase + (i * position.width);
                     var togglePos = EditorGUI.PrefixLabel(position, new GUIContent(enumNames[i]), style);
-
-                    var isSet = IsSet(i);
                     if (EditorGUI.Toggle(togglePos, IsSet(i)))
                     {
-                        if (!isSet)
-                        {
-                            Undo.RecordObject(targetObject as UnityEngine.Object, "Toggled " + Enum.GetNames(fieldInfo.FieldType)[i] + "in mask on");
-                        }
                         ToggleIndex(i, true);
                     }
                     else
                     {
-                        if (isSet)
-                        {
-                            Undo.RecordObject(targetObject as UnityEngine.Object, "Toggled " + Enum.GetNames(fieldInfo.FieldType)[i] + "in mask off");
-                        }
                         ToggleIndex(i, false);
                     }
                 }
@@ -197,8 +169,7 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
             }
         }
 
-        fieldInfo.SetValue(targetObject, theEnum);
-        property.serializedObject.ApplyModifiedProperties();
+        property.intValue = (int) theEnum;
     }
 
     /// <summary>
@@ -539,17 +510,4 @@ public class EnumMaskPropertyDrawer : PropertyDrawer
 
         return parentProp;
     }
-}
-
-[AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-public class EnumMaskAttribute : PropertyAttribute
-{
-    public bool alwaysFoldOut;
-    public EnumMaskLayout layout = EnumMaskLayout.Vertical;
-}
-
-public enum EnumMaskLayout
-{
-    Vertical,
-    Horizontal
 }
